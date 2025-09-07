@@ -1,44 +1,43 @@
 /**
- * 基础配置文件
+ * 基础配置文件 - 使用环境变量管理
  */
 
 import {getAvailableApiUrl} from '@/utils/apiAvailabilityChecker';
 
-const getConfig = (key, defaultValue) => {
-    if (typeof window !== 'undefined' && window.EZ_CONFIG && window.EZ_CONFIG[key] !== undefined) {
-        return window.EZ_CONFIG[key];
+// 辅助函数：解析布尔值
+const parseBoolean = (value, defaultValue = false) => {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+        return value.toLowerCase() === 'true';
     }
     return defaultValue;
 };
 
-const mergeDeep = (target, source) => {
-    if (!source) return target;
-    const output = {...target};
+// 辅助函数：解析数字
+const parseNumber = (value, defaultValue = 0) => {
+    const num = Number(value);
+    return isNaN(num) ? defaultValue : num;
+};
 
-    if (isObject(target) && isObject(source)) {
-        Object.keys(source).forEach(key => {
-            if (isObject(source[key])) {
-                if (!(key in target)) {
-                    output[key] = source[key];
-                } else {
-                    output[key] = mergeDeep(target[key], source[key]);
-                }
-            } else {
-                output[key] = source[key];
-            }
-        });
+// 辅助函数：解析数组（逗号分隔）
+const parseArray = (value, defaultValue = []) => {
+    if (!value || value.trim() === '') return defaultValue;
+    return value.split(',').map(item => item.trim()).filter(item => item);
+};
+
+// 辅助函数：解析JSON
+const parseJSON = (value, defaultValue = {}) => {
+    if (!value || value.trim() === '') return defaultValue;
+    try {
+        return JSON.parse(value);
+    } catch (error) {
+        console.warn('Failed to parse JSON:', value, error);
+        return defaultValue;
     }
-    return output;
 };
-
-const isObject = item => {
-    return (item && typeof item === 'object' && !Array.isArray(item));
-};
-
 
 // 获取面板类型的常量
-// 可选值: 'V2board', 'Xiao-V2board' 或 'Xboard'
-export const PANEL_TYPE = getConfig('PANEL_TYPE', 'V2board');
+export const PANEL_TYPE = import.meta.env.VITE_PANEL_TYPE || 'V2board';
 
 // 判断是否为Xiao-V2board面板
 export const isXiaoV2board = () => {
@@ -52,82 +51,69 @@ export const isXboard = () => {
 
 // 获取API基础URL的函数
 export const getApiBaseUrl = () => {
-    // 完全依赖config.js中的配置
-    if (typeof window !== 'undefined' && window.EZ_CONFIG) {
-        // 首先检查是否启用中间件代理
-        if (window.EZ_CONFIG.API_MIDDLEWARE_ENABLED === true && window.EZ_CONFIG.API_MIDDLEWARE_URL) {
-            // 使用中间件URL和路径
-            const middlewareUrl = window.EZ_CONFIG.API_MIDDLEWARE_URL.trim();
-            const middlewarePath = window.EZ_CONFIG.API_MIDDLEWARE_PATH;
-
-            // 确保URL末尾没有斜杠，且路径开头有斜杠，防止出现重复或缺少斜杠
-            const formattedUrl = middlewareUrl.endsWith('/') ? middlewareUrl.slice(0, -1) : middlewareUrl;
-            const formattedPath = middlewarePath.startsWith('/') ? middlewarePath : `/${middlewarePath}`;
-
-            const middlewareKey = window.EZ_CONFIG.API_MIDDLEWARE_KEY;
-            
-            if(middlewareKey) {
-              return formattedUrl;
-            }
-            return formattedUrl + formattedPath;
+    // 首先检查是否启用中间件代理
+    if (parseBoolean(import.meta.env.VITE_API_MIDDLEWARE_ENABLED) && import.meta.env.VITE_API_MIDDLEWARE_URL) {
+        const middlewareUrl = import.meta.env.VITE_API_MIDDLEWARE_URL.trim();
+        const middlewarePath = import.meta.env.VITE_API_MIDDLEWARE_PATH || '/ez/ez';
+        
+        // 确保URL末尾没有斜杠，且路径开头有斜杠
+        const formattedUrl = middlewareUrl.endsWith('/') ? middlewareUrl.slice(0, -1) : middlewareUrl;
+        const formattedPath = middlewarePath.startsWith('/') ? middlewarePath : `/${middlewarePath}`;
+        
+        const middlewareKey = import.meta.env.VITE_API_MIDDLEWARE_KEY;
+        
+        if (middlewareKey) {
+            return formattedUrl;
         }
+        return formattedUrl + formattedPath;
+    }
 
-        // 然后检查是否存在API_CONFIG
-        if (window.EZ_CONFIG.API_CONFIG) {
-            const apiConfig = window.EZ_CONFIG.API_CONFIG;
+    // API配置
+    const urlMode = import.meta.env.VITE_API_URL_MODE || 'static';
+    
+    // 静态URL模式
+    if (urlMode === 'static' && import.meta.env.VITE_STATIC_API_URLS) {
+        const staticUrls = parseArray(import.meta.env.VITE_STATIC_API_URLS);
+        
+        if (staticUrls.length > 1) {
+            // 使用API可用性检测器获取可用的URL
+            const availableUrl = getAvailableApiUrl();
+            if (availableUrl) {
+                return availableUrl;
+            }
+            // 如果没有可用URL，返回数组中的第一个URL
+            return staticUrls[0];
+        } else if (staticUrls.length === 1) {
+            return staticUrls[0];
+        }
+    }
 
-            // 静态URL模式
-            if (apiConfig.urlMode === 'static' && apiConfig.staticBaseUrl) {
-                // 检查是否有经过API可用性检测的URL
-                if (Array.isArray(apiConfig.staticBaseUrl) && apiConfig.staticBaseUrl.length > 1) {
-                    // 使用API可用性检测器获取可用的URL
-                    const availableUrl = getAvailableApiUrl();
-                    if (availableUrl) {
-                        return availableUrl;
-                    }
-                    // 如果没有可用URL，返回数组中的第一个URL
-                    return apiConfig.staticBaseUrl[0];
-                }
-                // 如果staticBaseUrl是数组但只有一个元素，返回该元素
-                else if (Array.isArray(apiConfig.staticBaseUrl) && apiConfig.staticBaseUrl.length === 1) {
-                    return apiConfig.staticBaseUrl[0];
-                }
-                // 如果staticBaseUrl是字符串，直接返回
-                else if (typeof apiConfig.staticBaseUrl === 'string') {
-                    return apiConfig.staticBaseUrl;
-                }
-                // 如果staticBaseUrl不是字符串也不是数组，返回空字符串
-                return '';
+    // 自动获取模式
+    if (urlMode === 'auto') {
+        try {
+            const currentUrl = new URL(window.location.href);
+            let apiBaseUrl = '';
+
+            // 协议
+            const protocol = parseBoolean(import.meta.env.VITE_AUTO_USE_SAME_PROTOCOL, true)
+                ? currentUrl.protocol
+                : 'https:';
+
+            // 域名
+            apiBaseUrl = `${protocol}//${currentUrl.host}`;
+
+            // API路径
+            if (parseBoolean(import.meta.env.VITE_AUTO_APPEND_API_PATH, true)) {
+                const apiPath = import.meta.env.VITE_AUTO_API_PATH || '/api/v1';
+                apiBaseUrl += apiPath;
             }
 
-            // 自动获取模式
-            if (apiConfig.urlMode === 'auto' && apiConfig.autoConfig) {
-                try {
-                    const currentUrl = new URL(window.location.href);
-                    let apiBaseUrl = '';
-
-                    // 协议
-                    const protocol = apiConfig.autoConfig.useSameProtocol
-                        ? currentUrl.protocol
-                        : 'https:';
-
-                    // 域名
-                    apiBaseUrl = `${protocol}//${currentUrl.host}`;
-
-                    // API路径
-                    if (apiConfig.autoConfig.appendApiPath && apiConfig.autoConfig.apiPath) {
-                        apiBaseUrl += apiConfig.autoConfig.apiPath;
-                    }
-
-                    return apiBaseUrl;
-                } catch (error) {
-                    console.error('自动获取API URL失败:', error);
-                    // 仅在自动模式失败时回退到静态URL
-                    if (apiConfig.staticBaseUrl) {
-                        return apiConfig.staticBaseUrl;
-                    }
-                }
-            }
+            return apiBaseUrl;
+        } catch (error) {
+            console.error('自动获取API URL失败:', error);
+            // 回退到静态URL
+            const staticUrls = parseArray(import.meta.env.VITE_STATIC_API_URLS);
+            return staticUrls[0] || '';
         }
     }
 
@@ -139,74 +125,43 @@ export const API_BASE_URL = getApiBaseUrl();
 
 /**
  * 安全配置选项
- * 可以通过这些选项轻松启用或禁用各种安全功能
  */
-const DEFAULT_SECURITY_CONFIG = {
-    // 是否启用前端域名验证（前端域名检查，防止未授权域名访问）
-    enableFrontendDomainCheck: false,
-
-    // 是否启用授权码验证
-    enableLicenseCheck: true,
+export const SECURITY_CONFIG = {
+    enableFrontendDomainCheck: parseBoolean(import.meta.env.VITE_SECURITY_ENABLE_FRONTEND_DOMAIN_CHECK, false),
+    enableLicenseCheck: true, // 保持原有逻辑
 };
 
-export const SECURITY_CONFIG = mergeDeep(DEFAULT_SECURITY_CONFIG, getConfig('SECURITY_CONFIG'));
-
 // 授权的前端域名列表
-const DEFAULT_AUTHORIZED_DOMAINS = [
-    'panghu.com',
-    // 在此处添加您授权的其他域名
-];
-
-export const AUTHORIZED_DOMAINS = getConfig('AUTHORIZED_DOMAINS', DEFAULT_AUTHORIZED_DOMAINS);
+export const AUTHORIZED_DOMAINS = parseArray(import.meta.env.VITE_AUTHORIZED_DOMAINS, ['panghu.com']);
 
 /**
  * 验证码配置
- * 控制注册和登录页面的验证方式
  */
-const DEFAULT_CAPTCHA_CONFIG = {
-    // 验证方式: 'google' 或 'cloudflare'
-    captchaType: 'google',
-
-    // Google reCAPTCHA 配置 默认v2
+export const CAPTCHA_CONFIG = {
+    captchaType: import.meta.env.VITE_CAPTCHA_TYPE || 'google',
     google: {
-        // 验证API地址
-        verifyUrl: 'https://www.google.com/recaptcha/api/siteverify'
+        verifyUrl: import.meta.env.VITE_CAPTCHA_GOOGLE_VERIFY_URL || 'https://www.google.com/recaptcha/api/siteverify'
     },
-
-    // Cloudflare Turnstile 配置
     cloudflare: {
-        // 验证API地址
-        verifyUrl: 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
+        verifyUrl: import.meta.env.VITE_CAPTCHA_CLOUDFLARE_VERIFY_URL || 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
     }
 };
 
-export const CAPTCHA_CONFIG = mergeDeep(DEFAULT_CAPTCHA_CONFIG, getConfig('CAPTCHA_CONFIG'));
-
 /**
  * 自定义请求标头配置
- * 允许用户自定义添加请求标头到所有API请求
  */
-const DEFAULT_CUSTOM_HEADERS_CONFIG = {
-    // 是否启用自定义标头
-    enabled: false,
-
-    // 自定义标头列表
-    headers: {}
+export const CUSTOM_HEADERS_CONFIG = {
+    enabled: parseBoolean(import.meta.env.VITE_CUSTOM_HEADERS_ENABLED, false),
+    headers: parseJSON(import.meta.env.VITE_CUSTOM_HEADERS, {})
 };
 
-export const CUSTOM_HEADERS_CONFIG = mergeDeep(DEFAULT_CUSTOM_HEADERS_CONFIG, getConfig('CUSTOM_HEADERS'));
-
 // 网站名称配置
-const DEFAULT_SITE_CONFIG = {
-    siteName: 'EZ THEME',
-    siteDescription: 'EZ UI',
-    copyright: `© ${new Date().getFullYear()} EZ THEME. All Rights Reserved.`,
-
-    // 是否显示标题中的网站Logo (true=显示, false=隐藏)
-    showLogo: true,
-
-    // Landing页面多语言标语
-    landingText: {
+export const SITE_CONFIG = {
+    siteName: import.meta.env.VITE_SITE_NAME || 'EZ THEME',
+    siteDescription: import.meta.env.VITE_SITE_DESCRIPTION || 'EZ UI',
+    copyright: `© ${new Date().getFullYear()} ${import.meta.env.VITE_SITE_NAME || 'EZ THEME'}. All Rights Reserved.`,
+    showLogo: parseBoolean(import.meta.env.VITE_SHOW_LOGO, true),
+    landingText: parseJSON(import.meta.env.VITE_LANDING_TEXT, {
         'zh-CN': '探索全球网络无限可能',
         'vi-VN': 'Khám phá khả năng vô hạn của mạng toàn cầu',
         'en-US': 'Explore Unlimited Possibilities of Global Network',
@@ -215,316 +170,189 @@ const DEFAULT_SITE_CONFIG = {
         'ko-KR': '글로벌 네트워크의 무한한 가능성을 탐색하세요',
         'ru-RU': 'Исследуйте безграничные возможности глобальной сети',
         'fa-IR': 'امکانات نامحدود شبکه جهانی را کاوش کنید'
-    },
-
-    // 自定义landing页面路径（相对于public目录）
-    customLandingPage: ''
+    }),
+    customLandingPage: import.meta.env.VITE_CUSTOM_LANDING_PAGE || ''
 };
-
-export const SITE_CONFIG = mergeDeep(DEFAULT_SITE_CONFIG, getConfig('SITE_CONFIG'));
 
 // 默认语言和主题配置
-const DEFAULT_BASE_CONFIG = {
-    // 默认语言 ('zh-CN' 或 'en-US') TODO
-    defaultLanguage: 'zh-CN',
-
-    // 默认主题 ('light' 或 'dark') TODO
-    defaultTheme: 'dark',
-
-    // 主题色 (16进制颜色值) TODO
-    primaryColor: '#00947c',
-
-    // 是否启用落地页 (true=启用, false=禁用) TODO
-    enableLandingPage: true
+export const DEFAULT_CONFIG = {
+    defaultLanguage: import.meta.env.VITE_DEFAULT_LANGUAGE || 'zh-CN',
+    defaultTheme: import.meta.env.VITE_DEFAULT_THEME || 'light',
+    primaryColor: import.meta.env.VITE_PRIMARY_COLOR || '#355cc2',
+    enableLandingPage: parseBoolean(import.meta.env.VITE_ENABLE_LANDING_PAGE, true)
 };
-
-export const DEFAULT_CONFIG = mergeDeep(DEFAULT_BASE_CONFIG, getConfig('DEFAULT_CONFIG'));
 
 /**
  * 支付相关配置
  */
-const DEFAULT_PAYMENT_CONFIG = {
-    // 是否在新标签页打开支付链接 (true=新标签页打开, false=当前页面打开)
-    openPaymentInNewTab: true,
-
-    // 支付二维码大小 (像素)
-    qrcodeSize: 200,
-
-    // 支付二维码的颜色
-    qrcodeColor: '#000000',
-
-    // 支付二维码的背景色
-    qrcodeBackground: '#ffffff',
-
-    // 是否自动检测支付状态 (true=启用自动检测, false=手动检测)
-    autoCheckPayment: true,
-
-    // 自动检测支付状态的间隔时间 (毫秒)
-    autoCheckInterval: 5000,
-
-    // 自动检测支付状态的最大次数 (设置为0表示无限次)
-    autoCheckMaxTimes: 30,
-
-    // 是否对Safari浏览器使用支付弹窗模式，而不是直接跳转 (true=使用弹窗, false=直接跳转)
-    useSafariPaymentModal: true,
-
-    // 是否自动选择第一个支付方式 (true=自动选择, false=需要用户手动选择)
-    autoSelectFirstMethod: true
+export const PAYMENT_CONFIG = {
+    openPaymentInNewTab: parseBoolean(import.meta.env.VITE_PAYMENT_OPEN_IN_NEW_TAB, true),
+    qrcodeSize: parseNumber(import.meta.env.VITE_PAYMENT_QRCODE_SIZE, 200),
+    qrcodeColor: import.meta.env.VITE_PAYMENT_QRCODE_COLOR || '#000000',
+    qrcodeBackground: import.meta.env.VITE_PAYMENT_QRCODE_BACKGROUND || '#ffffff',
+    autoCheckPayment: parseBoolean(import.meta.env.VITE_PAYMENT_AUTO_CHECK, true),
+    autoCheckInterval: parseNumber(import.meta.env.VITE_PAYMENT_AUTO_CHECK_INTERVAL, 5000),
+    autoCheckMaxTimes: parseNumber(import.meta.env.VITE_PAYMENT_AUTO_CHECK_MAX_TIMES, 60),
+    useSafariPaymentModal: parseBoolean(import.meta.env.VITE_PAYMENT_USE_SAFARI_MODAL, true),
+    autoSelectFirstMethod: parseBoolean(import.meta.env.VITE_PAYMENT_AUTO_SELECT_FIRST_METHOD, true)
 };
-
-export const PAYMENT_CONFIG = mergeDeep(DEFAULT_PAYMENT_CONFIG, getConfig('PAYMENT_CONFIG'));
 
 /**
  * 用户中心页面配置
- * 控制用户中心页面的功能显示
  */
-const DEFAULT_PROFILE_CONFIG = {
-    // 是否显示礼品卡兑换栏目 (true=显示, false=隐藏) TODO
-    showGiftCardRedeem: false,
-
-    // 是否显示最近登录设备栏目 (true=显示, false=隐藏)
-    showRecentDevices: true
+export const PROFILE_CONFIG = {
+    showGiftCardRedeem: parseBoolean(import.meta.env.VITE_PROFILE_SHOW_GIFT_CARD_REDEEM, false),
+    showRecentDevices: parseBoolean(import.meta.env.VITE_PROFILE_SHOW_RECENT_DEVICES, true)
 };
-
-export const PROFILE_CONFIG = mergeDeep(DEFAULT_PROFILE_CONFIG, getConfig('PROFILE_CONFIG'));
 
 /**
  * 工单配置
- * 控制工单功能的行为
  */
-const DEFAULT_TICKET_CONFIG = {
-    // 是否在创建工单时发送用户基础信息 (true=发送, false=不发送)
-    includeUserInfoInTicket: true,
-    // 弹窗配置
+export const TICKET_CONFIG = {
+    includeUserInfoInTicket: parseBoolean(import.meta.env.VITE_TICKET_INCLUDE_USER_INFO, true),
     popup: {
-        enabled: true,
-        title: '工单须知',
-        content: '<p>请您准确描述您的问题，再提交工单，以便我们更快帮助您。</p>',
-        cooldownHours: 24,
-        closeWaitSeconds: 0
+        enabled: parseBoolean(import.meta.env.VITE_TICKET_POPUP_ENABLED, true),
+        title: import.meta.env.VITE_TICKET_POPUP_TITLE || '工单须知',
+        content: import.meta.env.VITE_TICKET_POPUP_CONTENT || '<p>请您准确描述您的问题，再提交工单，以便我们更快帮助您。</p>',
+        cooldownHours: parseNumber(import.meta.env.VITE_TICKET_POPUP_COOLDOWN_HOURS, 24),
+        closeWaitSeconds: parseNumber(import.meta.env.VITE_TICKET_POPUP_CLOSE_WAIT_SECONDS, 0)
     }
 };
-
-export const TICKET_CONFIG = mergeDeep(DEFAULT_TICKET_CONFIG, getConfig('TICKET_CONFIG'));
 
 /**
  * 流量明细配置
- * 控制流量明细页面的行为
  */
-const DEFAULT_TRAFFICLOG_CONFIG = {
-    // 是否启用流量明细页面 (true=启用, false=禁用)
-    enableTrafficLog: true,
-
-    // 显示多少天的流量记录
-    daysToShow: 30,
-
-    // 流量趋势图是否聚合每日流量 (如果你的节点倍率全为1倍则无需开启)
-    sumDailyTraffic: false
+export const TRAFFICLOG_CONFIG = {
+    enableTrafficLog: parseBoolean(import.meta.env.VITE_TRAFFICLOG_ENABLE, true),
+    daysToShow: parseNumber(import.meta.env.VITE_TRAFFICLOG_DAYS_TO_SHOW, 30),
+    sumDailyTraffic: parseBoolean(import.meta.env.VITE_TRAFFICLOG_SUM_DAILY_TRAFFIC, false)
 };
-
-export const TRAFFICLOG_CONFIG = mergeDeep(DEFAULT_TRAFFICLOG_CONFIG, getConfig('TRAFFICLOG_CONFIG'));
 
 /**
  * 客户端下载配置
- * 用于控制仪表板中的客户端下载选项
  */
-const DEFAULT_CLIENT_CONFIG = {
-    // 整个下载卡片显示控制 TODO
-    showDownloadCard: false,  // 设置为false将隐藏整个客户端下载卡片
-
-    // 平台显示控制 (true=显示, false=隐藏)
-    showIOS: false,         // iOS客户端显示控制
-    showAndroid: false,     // Android客户端显示控制
-    showMacOS: false,       // MacOS客户端显示控制
-    showWindows: false,     // Windows客户端显示控制
-    showLinux: false,       // Linux客户端显示控制
-    showOpenWrt: false,     // OpenWrt客户端显示控制
+export const CLIENT_CONFIG = {
+    showDownloadCard: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_DOWNLOAD_CARD, true),
+    
+    // 平台显示控制
+    showIOS: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_IOS, true),
+    showAndroid: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_ANDROID, true),
+    showMacOS: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_MACOS, true),
+    showWindows: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_WINDOWS, true),
+    showLinux: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_LINUX, true),
+    showOpenWrt: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_OPENWRT, true),
 
     // 客户端下载链接
     clientLinks: {
-        ios: 'https://apps.apple.com/app/xxx',         // iOS客户端下载链接
-        android: 'https://play.google.com/store/apps/xxx', // Android客户端下载链接
-        macos: 'https://github.com/xxx/releases/latest',     // MacOS客户端下载链接
-        windows: 'https://github.com/xxx/releases/latest', // Windows客户端下载链接
-        linux: 'https://github.com/xxx/releases/latest',     // Linux客户端下载链接
-        openwrt: 'https://github.com/xxx/releases/latest'  // OpenWrt客户端下载链接
+        ios: import.meta.env.VITE_CLIENT_LINK_IOS || 'https://apps.apple.com/app/xxx',
+        android: import.meta.env.VITE_CLIENT_LINK_ANDROID || 'https://play.google.com/store/apps/xxx',
+        macos: import.meta.env.VITE_CLIENT_LINK_MACOS || 'https://github.com/xxx/releases/latest',
+        windows: import.meta.env.VITE_CLIENT_LINK_WINDOWS || 'https://github.com/xxx/releases/latest',
+        linux: import.meta.env.VITE_CLIENT_LINK_LINUX || 'https://github.com/xxx/releases/latest',
+        openwrt: import.meta.env.VITE_CLIENT_LINK_OPENWRT || 'https://github.com/xxx/releases/latest'
     },
 
-    // ===========================================================
-
-    // 订阅导入客户端显示控制
     // iOS平台客户端
-    showShadowrocket: true,   // Shadowrocket
-    showSurge: true,          // Surge
-    showStash: true,          // Stash
-    showQuantumultX: true,    // QuantumultX
-    showHiddifyIOS: true,     // Hiddify for IOS
-    showSingboxIOS: true,     // SingBox for iOS
-    showLoon: true,           // Loon
+    showShadowrocket: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_SHADOWROCKET, true),
+    showSurge: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_SURGE, true),
+    showStash: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_STASH, true),
+    showQuantumultX: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_QUANTUMULTX, true),
+    showHiddifyIOS: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_HIDDIFY_IOS, true),
+    showSingboxIOS: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_SINGBOX_IOS, true),
+    showLoon: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_LOON, true),
 
     // Android平台客户端
-    showFlClashAndroid: true,   // FlClash for Android
-    showV2rayNG: true,          // V2rayNG
-    showClashAndroid: true,     // Clash for Android
-    showSurfboard: true,        // Surfboard
-    showClashMetaAndroid: true, // Clash Meta for Android
-    showNekobox: true,          // Nekobox
-    showSingboxAndroid: true,   // SingBox for Android
-    showHiddifyAndroid: true,   // Hiddify for Android
+    showFlClashAndroid: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_FLCLASH_ANDROID, true),
+    showV2rayNG: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_V2RAYNG, true),
+    showClashAndroid: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_CLASH_ANDROID, true),
+    showSurfboard: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_SURFBOARD, true),
+    showClashMetaAndroid: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_CLASH_META_ANDROID, true),
+    showNekobox: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_NEKOBOX, true),
+    showSingboxAndroid: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_SINGBOX_ANDROID, true),
+    showHiddifyAndroid: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_HIDDIFY_ANDROID, true),
 
     // Windows平台客户端
-    showFlClashWindows: true,   // FlClash for Windows
-    showClashVergeWindows: true,// ClashVerge for Windows
-    showClashWindows: true,     // Clash for Windows
-    showNekoray: true,          // Nekoray
-    showSingboxWindows: true,   // SingBox for Windows
-    showHiddifyWindows: true,   // Hiddify for Windows
+    showFlClashWindows: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_FLCLASH_WINDOWS, true),
+    showClashVergeWindows: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_CLASH_VERGE_WINDOWS, true),
+    showClashWindows: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_CLASH_WINDOWS, true),
+    showNekoray: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_NEKORAY, true),
+    showSingboxWindows: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_SINGBOX_WINDOWS, true),
+    showHiddifyWindows: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_HIDDIFY_WINDOWS, true),
 
     // MacOS平台客户端
-    showFlClashMac: true,       // FlClash for Mac
-    showClashVergeMac: true,    // ClashVerge for Mac
-    showClashX: true,           // ClashX
-    showClashMetaX: true,       // ClashX Meta
-    showSurgeMac: true,         // Surge for Mac
-    showStashMac: true,         // Stash for Mac
-    showQuantumultXMac: true,   // QuantumultX for Mac
-    showSingboxMac: true,       // SingBox for Mac
-    showHiddifyMac: true        // Hiddify for Mac
+    showFlClashMac: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_FLCLASH_MAC, true),
+    showClashVergeMac: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_CLASH_VERGE_MAC, true),
+    showClashX: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_CLASHX, true),
+    showClashMetaX: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_CLASH_METAX, true),
+    showSurgeMac: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_SURGE_MAC, true),
+    showStashMac: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_STASH_MAC, true),
+    showQuantumultXMac: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_QUANTUMULTX_MAC, true),
+    showSingboxMac: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_SINGBOX_MAC, true),
+    showHiddifyMac: parseBoolean(import.meta.env.VITE_CLIENT_SHOW_HIDDIFY_MAC, true)
 };
-
-export const CLIENT_CONFIG = mergeDeep(DEFAULT_CLIENT_CONFIG, getConfig('CLIENT_CONFIG'));
 
 /**
  * 商店页面配置
- * 控制商店页面的行为和显示
  */
-const DEFAULT_SHOP_CONFIG = {
-    // 是否在商店导航上显示热销标记
-    showHotSaleBadge: true,
-
-    // 是否显示套餐特性卡片 (true=显示, false=隐藏)
-    showPlanFeatureCards: true,
-
-    // 是否自动选择周期最大的标签，设为false则不会自动选择
-    autoSelectMaxPeriod: false,
-
-    // 是否隐藏周期选择标签 (true=隐藏, false=显示)
-    hidePeriodTabs: false,
-
-    // 库存紧张的阈值（当库存数量小于等于此值且大于0时显示库存紧张）
-    lowStockThreshold: 5,
-
-    // 是否启用周期折扣计算显示 (true=启用, false=禁用)
-    enableDiscountCalculation: true,
-
+export const SHOP_CONFIG = {
+    showHotSaleBadge: parseBoolean(import.meta.env.VITE_SHOP_SHOW_HOT_SALE_BADGE, false),
+    showPlanFeatureCards: parseBoolean(import.meta.env.VITE_SHOP_SHOW_PLAN_FEATURE_CARDS, true),
+    autoSelectMaxPeriod: parseBoolean(import.meta.env.VITE_SHOP_AUTO_SELECT_MAX_PERIOD, false),
+    hidePeriodTabs: parseBoolean(import.meta.env.VITE_SHOP_HIDE_PERIOD_TABS, false),
+    lowStockThreshold: parseNumber(import.meta.env.VITE_SHOP_LOW_STOCK_THRESHOLD, 5),
+    enableDiscountCalculation: parseBoolean(import.meta.env.VITE_SHOP_ENABLE_DISCOUNT_CALCULATION, true),
+    
     // 价格周期的显示顺序（从大到小）
     periodOrder: [
-        'three_year_price', // 三年
-        'two_year_price',   // 两年
-        'year_price',       // 一年
-        'half_year_price',  // 半年
-        'quarter_price',    // 季度
-        'month_price',      // 月付
-        'onetime_price'     // 一次性
+        'three_year_price', 'two_year_price', 'year_price', 'half_year_price',
+        'quarter_price', 'month_price', 'onetime_price'
     ],
 
-    // 商店弹窗配置
     popup: {
-        // 是否启用弹窗
-        enabled: false,
-
-        // 弹窗标题
-        title: "",
-
-        // 弹窗内容 (支持HTML)
-        content: "",
-
-        // 冷却时间（小时），在此时间内不会再次显示弹窗
-        cooldownHours: 2,
-
-        // 等待时间（秒），用户需要等待多少秒才能关闭弹窗，设为0表示无需等待
-        closeWaitSeconds: 0
+        enabled: parseBoolean(import.meta.env.VITE_SHOP_POPUP_ENABLED, false),
+        title: import.meta.env.VITE_SHOP_POPUP_TITLE || '',
+        content: import.meta.env.VITE_SHOP_POPUP_CONTENT || '',
+        cooldownHours: parseNumber(import.meta.env.VITE_SHOP_POPUP_COOLDOWN_HOURS, 0),
+        closeWaitSeconds: parseNumber(import.meta.env.VITE_SHOP_POPUP_CLOSE_WAIT_SECONDS, 0)
     }
 };
 
-export const SHOP_CONFIG = mergeDeep(DEFAULT_SHOP_CONFIG, getConfig('SHOP_CONFIG'));
-
-// ===========================================================
-
-
 /**
- * 商店二次确认
- * 提交订单强制二次确认
+ * 订单配置
  */
-const DEFAULT_ORDER_CONFIG = {
-    // 是否启用二次确认
-    confirmOrder: true,
-    // 二次确认内容
-    confirmOrderContent: "<p>您确定要购买该套餐吗？</p>",
+export const ORDER_CONFIG = {
+    confirmOrder: parseBoolean(import.meta.env.VITE_ORDER_CONFIRM_ORDER, true),
+    confirmOrderContent: import.meta.env.VITE_ORDER_CONFIRM_CONTENT || '<p>您确定要购买该套餐吗？</p>'
 };
-export const ORDER_CONFIG = mergeDeep(DEFAULT_ORDER_CONFIG, getConfig('ORDER_CONFIG'));
-
-
-// ===========================================================
-
 
 /**
  * 仪表盘页面配置
- * 控制仪表盘页面的功能与显示
  */
-const DEFAULT_DASHBOARD_CONFIG = {
-    // 是否在欢迎卡片中显示用户邮箱 (true=显示, false=隐藏)
-    showUserEmail: true,
-
-    // 是否为导入订阅按钮添加高光效果和填充底色 (true=添加效果, false=不添加效果)
-    importButtonHighlightBtnbgcolor: true,
-
-    // 是否启用重置流量功能 (true=启用, false=禁用)
-    enableResetTraffic: true,
-
-    // 重置流量按钮显示条件 ('always'=始终显示, 'low'=流量低于阈值时显示, 'depleted'=流量耗尽时显示)
-    resetTrafficDisplayMode: 'low',
-
-    // 低流量阈值百分比 (1-100)，当剩余流量百分比低于此值时触发低流量警告
-    lowTrafficThreshold: 10,
-
-    // 是否启用续费套餐功能 (true=启用, false=禁用)
-    enableRenewPlan: true,
-
-    // 续费套餐按钮显示条件 ('always'=始终显示, 'expiring'=套餐即将到期时显示, 'expired'=套餐已过期时显示)
-    renewPlanDisplayMode: 'always',
-
-    // 即将过期的天数阈值 (1-30)，当剩余天数小于等于此值时触发即将过期警告
-    expiringThreshold: 7,
-
-    // 是否显示在线设备数量限制 (true=显示, false=隐藏，仅Xiao-V2board支持)
-    showOnlineDevicesLimit: true,
-    
-    // 是否显示导入订阅
-    showImportSubscription: true,
+export const DASHBOARD_CONFIG = {
+    showUserEmail: parseBoolean(import.meta.env.VITE_DASHBOARD_SHOW_USER_EMAIL, true),
+    importButtonHighlightBtnbgcolor: parseBoolean(import.meta.env.VITE_DASHBOARD_IMPORT_BUTTON_HIGHLIGHT, false),
+    enableResetTraffic: parseBoolean(import.meta.env.VITE_DASHBOARD_ENABLE_RESET_TRAFFIC, true),
+    resetTrafficDisplayMode: import.meta.env.VITE_DASHBOARD_RESET_TRAFFIC_DISPLAY_MODE || 'low',
+    lowTrafficThreshold: parseNumber(import.meta.env.VITE_DASHBOARD_LOW_TRAFFIC_THRESHOLD, 10),
+    enableRenewPlan: parseBoolean(import.meta.env.VITE_DASHBOARD_ENABLE_RENEW_PLAN, true),
+    renewPlanDisplayMode: import.meta.env.VITE_DASHBOARD_RENEW_PLAN_DISPLAY_MODE || 'always',
+    expiringThreshold: parseNumber(import.meta.env.VITE_DASHBOARD_EXPIRING_THRESHOLD, 7),
+    showOnlineDevicesLimit: parseBoolean(import.meta.env.VITE_DASHBOARD_SHOW_ONLINE_DEVICES_LIMIT, true),
+    showImportSubscription: parseBoolean(import.meta.env.VITE_DASHBOARD_SHOW_IMPORT_SUBSCRIPTION, true)
 };
-
-export const DASHBOARD_CONFIG = mergeDeep(DEFAULT_DASHBOARD_CONFIG, getConfig('DASHBOARD_CONFIG'));
 
 /**
  * 将16进制颜色转换为RGB数组
- * @param {string} hex - 16进制颜色值
- * @returns {number[]} RGB数组
  */
 const hexToRgb = (hex) => {
-    // 确保输入值是字符串
     if (typeof hex !== 'string') {
         hex = String(hex);
     }
 
-    // 去除空格
     hex = hex.trim();
-
-    // 处理缩写形式的颜色值（例如#FFF -> #FFFFFF）
     const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
     hex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
 
-    // 正则匹配完整的十六进制颜色值
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
 
     if (result) {
@@ -538,15 +366,12 @@ const hexToRgb = (hex) => {
 
 /**
  * 计算主题相关的颜色
- * @param {string} primaryColor - 主题色（16进制）
- * @returns {object} 主题色相关的颜色对象
  */
 const calculateThemeColors = (primaryColor) => {
     const rgb = hexToRgb(primaryColor);
     return {
         primaryColor: primaryColor,
         primaryColorRgb: rgb.join(', '),
-        // 计算衍生颜色
         primaryColorLight: `rgba(${rgb.join(', ')}, 0.1)`,
         primaryColorDark: primaryColor,
         primaryColorHover: `rgba(${rgb.join(', ')}, 0.9)`,
@@ -555,12 +380,9 @@ const calculateThemeColors = (primaryColor) => {
     };
 };
 
-// 默认主题配置
-const DEFAULT_THEME_CONFIG = {
-    // 默认主题（light或dark）
+// 主题配置
+export const THEME_CONFIG = {
     defaultTheme: DEFAULT_CONFIG.defaultTheme,
-
-    // 主题颜色变量
     light: {
         ...calculateThemeColors(DEFAULT_CONFIG.primaryColor),
         backgroundColor: '#f5f7fa',
@@ -570,7 +392,6 @@ const DEFAULT_THEME_CONFIG = {
         borderColor: '#e8e8e8',
         shadowColor: 'rgba(0, 0, 0, 0.1)'
     },
-
     dark: {
         ...calculateThemeColors(DEFAULT_CONFIG.primaryColor),
         backgroundColor: '#171A1D',
@@ -582,11 +403,8 @@ const DEFAULT_THEME_CONFIG = {
     }
 };
 
-export const THEME_CONFIG = mergeDeep(DEFAULT_THEME_CONFIG, getConfig('THEME_CONFIG'));
-
-
-// 默认背景装饰球配置
-const DEFAULT_BACKGROUND_BALLS_CONFIG = [
+// 背景装饰球配置
+export const BACKGROUND_BALLS_CONFIG = [
     {
         size: '600px',
         background: 'var(--theme-color)',
@@ -607,276 +425,156 @@ const DEFAULT_BACKGROUND_BALLS_CONFIG = [
     }
 ];
 
-export const BACKGROUND_BALLS_CONFIG = getConfig('BACKGROUND_BALLS_CONFIG', DEFAULT_BACKGROUND_BALLS_CONFIG);
-
 /**
  * 浏览器访问限制配置
- * 控制哪些浏览器被禁止访问网站
  */
-const DEFAULT_BROWSER_RESTRICT_CONFIG = {
-    // 是否启用浏览器限制功能
-    enabled: false,
-
-    // 各浏览器是否被限制访问（true=限制访问，false=允许访问）
+export const BROWSER_RESTRICT_CONFIG = {
+    enabled: parseBoolean(import.meta.env.VITE_BROWSER_RESTRICT_ENABLED, false),
     restrictBrowsers: {
-        '360': true,     // 360浏览器
-        'QQ': true,      // QQ浏览器
-        'WeChat': true,  // 微信内置浏览器
-        'Baidu': true,   // 百度浏览器
-        'Sogou': true,   // 搜狗浏览器
-        'UC': false,     // UC浏览器
-        'Maxthon': false // 傲游浏览器
+        '360': parseBoolean(import.meta.env.VITE_BROWSER_RESTRICT_360, true),
+        'QQ': parseBoolean(import.meta.env.VITE_BROWSER_RESTRICT_QQ, true),
+        'WeChat': parseBoolean(import.meta.env.VITE_BROWSER_RESTRICT_WECHAT, true),
+        'Baidu': parseBoolean(import.meta.env.VITE_BROWSER_RESTRICT_BAIDU, true),
+        'Sogou': parseBoolean(import.meta.env.VITE_BROWSER_RESTRICT_SOGOU, true),
+        'UC': parseBoolean(import.meta.env.VITE_BROWSER_RESTRICT_UC, false),
+        'Maxthon': parseBoolean(import.meta.env.VITE_BROWSER_RESTRICT_MAXTHON, false)
     },
-
-    // 推荐下载的浏览器链接
     recommendedBrowsers: {
-        'Chrome': 'https://www.google.cn/chrome/',
-        'Edge': 'https://www.microsoft.com/zh-cn/edge'
+        'Chrome': import.meta.env.VITE_BROWSER_RECOMMEND_CHROME || 'https://www.google.cn/chrome/',
+        'Edge': import.meta.env.VITE_BROWSER_RECOMMEND_EDGE || 'https://www.microsoft.com/zh-cn/edge'
     }
 };
 
-export const BROWSER_RESTRICT_CONFIG = mergeDeep(DEFAULT_BROWSER_RESTRICT_CONFIG, getConfig('BROWSER_RESTRICT_CONFIG'));
-
 /**
  * 检测当前浏览器类型
- * @returns {string} 浏览器类型
  */
 export const detectBrowser = () => {
     const ua = navigator.userAgent.toLowerCase();
 
-    // 检测微信浏览器
-    if (ua.indexOf('micromessenger') !== -1) {
-        return 'WeChat';
-    }
+    if (ua.indexOf('micromessenger') !== -1) return 'WeChat';
+    if (ua.indexOf('qqbrowser') !== -1 || ua.indexOf(' qq') !== -1 && ua.indexOf('mqqbrowser') !== -1) return 'QQ';
+    if (ua.indexOf('qihu') !== -1 || ua.indexOf('360ee') !== -1 || ua.indexOf('360se') !== -1 ||
+        (ua.indexOf('chrome') !== -1 && (navigator.connection?.saveData === undefined) && (navigator.connection?.rtt === undefined))) return '360';
+    if (ua.indexOf('bidubrowser') !== -1 || ua.indexOf('baidubrowser') !== -1) return 'Baidu';
+    if (ua.indexOf('metasr') !== -1 || ua.indexOf('sogou') !== -1) return 'Sogou';
+    if (ua.indexOf('ucbrowser') !== -1 || ua.indexOf('ucweb') !== -1) return 'UC';
+    if (ua.indexOf('maxthon') !== -1) return 'Maxthon';
+    if (ua.indexOf('edg') !== -1) return 'Edge';
+    if (ua.indexOf('chrome') !== -1) return 'Chrome';
+    if (ua.indexOf('safari') !== -1) return 'Safari';
+    if (ua.indexOf('firefox') !== -1) return 'Firefox';
 
-    // 检测QQ浏览器
-    if (ua.indexOf('qqbrowser') !== -1 || ua.indexOf(' qq') !== -1 && ua.indexOf('mqqbrowser') !== -1) {
-        return 'QQ';
-    }
-
-    // 检测360浏览器 (不同版本有不同标识)
-    if (
-        ua.indexOf('qihu') !== -1 ||
-        ua.indexOf('360ee') !== -1 ||
-        ua.indexOf('360se') !== -1 ||
-        (ua.indexOf('chrome') !== -1 && (navigator.connection?.saveData === undefined) && (navigator.connection?.rtt === undefined))
-    ) {
-        return '360';
-    }
-
-    // 检测百度浏览器
-    if (ua.indexOf('bidubrowser') !== -1 || ua.indexOf('baidubrowser') !== -1) {
-        return 'Baidu';
-    }
-
-    // 检测搜狗浏览器
-    if (ua.indexOf('metasr') !== -1 || ua.indexOf('sogou') !== -1) {
-        return 'Sogou';
-    }
-
-    // 检测UC浏览器
-    if (ua.indexOf('ucbrowser') !== -1 || ua.indexOf('ucweb') !== -1) {
-        return 'UC';
-    }
-
-    // 检测傲游浏览器
-    if (ua.indexOf('maxthon') !== -1) {
-        return 'Maxthon';
-    }
-
-    // 检测Edge浏览器
-    if (ua.indexOf('edg') !== -1) {
-        return 'Edge';
-    }
-
-    // 检测Chrome浏览器
-    if (ua.indexOf('chrome') !== -1) {
-        return 'Chrome';
-    }
-
-    // 检测Safari浏览器
-    if (ua.indexOf('safari') !== -1) {
-        return 'Safari';
-    }
-
-    // 检测Firefox浏览器
-    if (ua.indexOf('firefox') !== -1) {
-        return 'Firefox';
-    }
-
-    // 默认返回Unknown
     return 'Unknown';
 };
 
 /**
  * 检查当前浏览器是否被限制访问
- * @returns {boolean} 是否被限制
  */
 export const isBrowserRestricted = () => {
-    // 如果功能未启用，所有浏览器都允许访问
-    if (!BROWSER_RESTRICT_CONFIG.enabled) {
-        return false;
-    }
-
+    if (!BROWSER_RESTRICT_CONFIG.enabled) return false;
     const browserType = detectBrowser();
-
-    // 检查浏览器是否在限制列表中
-    if (BROWSER_RESTRICT_CONFIG.restrictBrowsers[browserType]) {
-        return true;
-    }
-
-    return false;
+    return BROWSER_RESTRICT_CONFIG.restrictBrowsers[browserType] || false;
 };
 
 /**
  * 充值相关配置
  */
-const DEFAULT_WALLET_CONFIG = {
-    // 预设充值金额选项（单位：元）
-    presetAmounts: [6, 30, 68, 128, 256, 328, 648, 1280],
-
-    // 默认选中的充值金额（如果设为null则不预选金额）
-    defaultSelectedAmount: null,
-
-    // 最小充值金额（单位：元）
-    minimumDepositAmount: 1
+export const WALLET_CONFIG = {
+    presetAmounts: parseArray(import.meta.env.VITE_WALLET_PRESET_AMOUNTS, [6, 30, 68, 128, 256, 328, 648, 1280]).map(Number),
+    defaultSelectedAmount: import.meta.env.VITE_WALLET_DEFAULT_SELECTED_AMOUNT ? parseNumber(import.meta.env.VITE_WALLET_DEFAULT_SELECTED_AMOUNT) : null,
+    minimumDepositAmount: parseNumber(import.meta.env.VITE_WALLET_MINIMUM_DEPOSIT_AMOUNT, 1)
 };
-
-export const WALLET_CONFIG = mergeDeep(DEFAULT_WALLET_CONFIG, getConfig('WALLET_CONFIG'));
 
 /**
  * 邀请页面配置
  */
-const DEFAULT_INVITE_CONFIG = {
-    // 是否在导航栏的邀请按钮上显示返利标记
-    showCommissionBadge: true,
-
-    // 返佣记录每页显示数量（最小值为10，API限制每次请求最少需要返回10条记录）
-    recordsPerPage: 10,
-    // 邀请链接配置
+export const INVITE_CONFIG = {
+    showCommissionBadge: parseBoolean(import.meta.env.VITE_INVITE_SHOW_COMMISSION_BADGE, false),
+    recordsPerPage: parseNumber(import.meta.env.VITE_INVITE_RECORDS_PER_PAGE, 10),
     inviteLinkConfig: {
-        // 链接模式：'auto'=自动使用当前站点域名，'custom'=使用自定义域名
-        linkMode: 'auto',
-        // 自定义域名，当linkMode为'custom'时使用
-        customDomain: 'https://example.com'
+        linkMode: import.meta.env.VITE_INVITE_LINK_MODE || 'auto',
+        customDomain: import.meta.env.VITE_INVITE_CUSTOM_DOMAIN || 'https://example.com'
     }
 };
 
-export const INVITE_CONFIG = mergeDeep(DEFAULT_INVITE_CONFIG, getConfig('INVITE_CONFIG'));
-
 /**
  * 节点列表配置
- * 控制节点列表页面的显示内容
  */
-const DEFAULT_NODES_CONFIG = {
-    // 是否显示节点倍率 (true=显示, false=隐藏)
-    showNodeRate: true,
-
-    // 是否显示节点详细信息（主机和端口）
-    showNodeDetails: false
+export const NODES_CONFIG = {
+    showNodeRate: parseBoolean(import.meta.env.VITE_NODES_SHOW_NODE_RATE, true),
+    showNodeDetails: parseBoolean(import.meta.env.VITE_NODES_SHOW_NODE_DETAILS, false),
+    allowViewNodeInfo: parseBoolean(import.meta.env.VITE_NODES_ALLOW_VIEW_NODE_INFO, true)
 };
-
-export const NODES_CONFIG = mergeDeep(DEFAULT_NODES_CONFIG, getConfig('NODES_CONFIG'));
 
 /**
  * 客服系统配置
  */
-const DEFAULT_CUSTOMER_SERVICE_CONFIG = {
-    // 是否启用客服系统
-    enabled: false,
-
-    // 客服系统类型: 'crisp' 或 'other'
-    type: 'crisp',
-
-    // 客服系统HTML代码
-    customHtml: '',
-
-    // 是否在未登录状态下也显示客服图标
-    showWhenNotLoggedIn: true,
-
-    // 客服系统嵌入模式: 'popup'=弹出式页面, 'embed'=嵌入到每个页面(仅支持Crisp)
-    embedMode: 'embed',
-
-    // 图标位置配置
+export const CUSTOMER_SERVICE_CONFIG = {
+    enabled: parseBoolean(import.meta.env.VITE_CUSTOMER_SERVICE_ENABLED, false),
+    type: import.meta.env.VITE_CUSTOMER_SERVICE_TYPE || 'crisp',
+    customHtml: import.meta.env.VITE_CUSTOMER_SERVICE_CUSTOM_HTML || '',
+    showWhenNotLoggedIn: parseBoolean(import.meta.env.VITE_CUSTOMER_SERVICE_SHOW_WHEN_NOT_LOGGED_IN, true),
+    embedMode: import.meta.env.VITE_CUSTOMER_SERVICE_EMBED_MODE || 'embed',
     iconPosition: {
-        // 桌面版图标距离左下角的距离
         desktop: {
-            left: '20px',
-            bottom: '20px'
+            left: import.meta.env.VITE_CUSTOMER_SERVICE_DESKTOP_LEFT || '20px',
+            bottom: import.meta.env.VITE_CUSTOMER_SERVICE_DESKTOP_BOTTOM || '20px'
         },
-        // 移动版图标距离右下角的距离
         mobile: {
-            right: '20px',
-            bottom: '100px'
+            right: import.meta.env.VITE_CUSTOMER_SERVICE_MOBILE_RIGHT || '20px',
+            bottom: import.meta.env.VITE_CUSTOMER_SERVICE_MOBILE_BOTTOM || '100px'
         }
     }
 };
 
-// 注意：当使用Crisp类型客服时，系统会自动向Crisp传递用户数据（邮箱、套餐名称、到期时间、可用流量、用户余额）
-export const CUSTOMER_SERVICE_CONFIG = mergeDeep(DEFAULT_CUSTOMER_SERVICE_CONFIG, getConfig('CUSTOMER_SERVICE_CONFIG'));
-
 /**
  * More页面自定义卡片配置
  */
-const DEFAULT_MORE_PAGE_CONFIG = {
-    // 是否启用自定义卡片功能
-    enableCustomCards: true,
-
-    // 自定义卡片列表
-    customCards: [
-        // 示例自定义卡片
-        // {
-        //   id: 'example_card',           // 卡片唯一ID
-        //   title: '示例卡片',             // 卡片标题
-        //   description: '这是一个示例',   // 卡片描述
-        //   icon: 'IconWorld',            // 卡片图标（使用@tabler/icons-vue图标名称）
-        //   url: 'https://example.com',   // 点击卡片跳转的URL
-        //   openInNewTab: true            // 是否在新标签页打开
-        // }
-    ]
+export const MORE_PAGE_CONFIG = {
+    enableCustomCards: parseBoolean(import.meta.env.VITE_MORE_PAGE_ENABLE_CUSTOM_CARDS, false),
+    customCards: parseJSON(import.meta.env.VITE_MORE_PAGE_CUSTOM_CARDS, [])
 };
-
-export const MORE_PAGE_CONFIG = mergeDeep(DEFAULT_MORE_PAGE_CONFIG, getConfig('MORE_PAGE_CONFIG'));
 
 /**
  * 认证页面布局配置
  */
-const DEFAULT_AUTH_LAYOUT_CONFIG = {
-    // 布局类型: 'center' 为居中卡片布局, 'split' 为左右分栏布局
-    layoutType: 'center',
-
-    // 左右分栏布局配置 (仅当 layoutType 为 'split' 时生效)
+export const AUTH_LAYOUT_CONFIG = {
+    layoutType: import.meta.env.VITE_AUTH_LAYOUT_TYPE || 'center',
     splitLayout: {
-        // 左侧区域内容配置
         leftContent: {
-            // 左侧背景图片URL (如不设置则不设置图片背景)
-            backgroundImage: '',
-            // 左上角网站名称配置
+            backgroundImage: import.meta.env.VITE_AUTH_SPLIT_BACKGROUND_IMAGE || '',
             siteName: {
-                // 是否显示网站名称
-                show: true,
-                // 文字颜色 (white或black)
-                color: 'white'
+                show: parseBoolean(import.meta.env.VITE_AUTH_SPLIT_SHOW_SITE_NAME, true),
+                color: import.meta.env.VITE_AUTH_SPLIT_SITE_NAME_COLOR || 'white'
             },
-            // 左下角问候语配置
             greeting: {
-                // 是否显示问候语
-                show: true,
-                // 文字颜色 (white或black)
-                color: 'white'
+                show: parseBoolean(import.meta.env.VITE_AUTH_SPLIT_SHOW_GREETING, true),
+                color: import.meta.env.VITE_AUTH_SPLIT_GREETING_COLOR || 'white'
             }
         }
     }
 };
 
-export const AUTH_LAYOUT_CONFIG = mergeDeep(DEFAULT_AUTH_LAYOUT_CONFIG, getConfig('AUTH_LAYOUT_CONFIG'));
-
 /**
  * 认证页面功能配置
  */
-const DEFAULT_AUTH_CONFIG = {
-    // 是否自动勾选同意条款复选框 (true=自动勾选, false=默认不勾选)
-    autoAgreeTerms: false
+export const AUTH_CONFIG = {
+    autoAgreeTerms: parseBoolean(import.meta.env.VITE_AUTO_AGREE_TERMS, false),
+    verificationCode: {
+        showCheckSpamTip: parseBoolean(import.meta.env.VITE_SHOW_CHECK_SPAM_TIP, true),
+        checkSpamTipDelay: parseNumber(import.meta.env.VITE_CHECK_SPAM_TIP_DELAY, 1000)
+    },
+    popup: {
+        enabled: parseBoolean(import.meta.env.VITE_AUTH_POPUP_ENABLED, false),
+        title: import.meta.env.VITE_AUTH_POPUP_TITLE || '用户须知 (可自定义开启)',
+        content: import.meta.env.VITE_AUTH_POPUP_CONTENT || '<p><strong>欢迎使用我们的服务！</strong></p><p>请注意以下事项：</p><ul><li>请妥善保管您的账号信息</li><li>如有问题请联系客服</li></ul>',
+        cooldownHours: parseNumber(import.meta.env.VITE_AUTH_POPUP_COOLDOWN_HOURS, 0),
+        closeWaitSeconds: parseNumber(import.meta.env.VITE_AUTH_POPUP_CLOSE_WAIT_SECONDS, 3)
+    }
 };
 
-export const AUTH_CONFIG = mergeDeep(DEFAULT_AUTH_CONFIG, getConfig('AUTH_CONFIG'));
+// API中间件配置导出
+export const API_MIDDLEWARE_ENABLED = parseBoolean(import.meta.env.VITE_API_MIDDLEWARE_ENABLED, false);
+export const API_MIDDLEWARE_KEY = import.meta.env.VITE_API_MIDDLEWARE_KEY || '';
+export const API_MIDDLEWARE_PATH = import.meta.env.VITE_API_MIDDLEWARE_PATH || '/api';
+export const API_BASE_URLS = parseArray(import.meta.env.VITE_API_BASE_URLS);

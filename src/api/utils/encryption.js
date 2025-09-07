@@ -1,6 +1,7 @@
 import CryptoJS from "crypto-js";
+import { API_MIDDLEWARE_KEY } from "../../utils/baseConfig.js";
 
-const key = window.EZ_CONFIG.API_MIDDLEWARE_KEY;
+const key = API_MIDDLEWARE_KEY;
 
 // 获取或生成 IV
 export const randomIv = () => {

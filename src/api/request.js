@@ -1,14 +1,20 @@
-﻿
-import axios from 'axios';
-import { API_BASE_URL, getApiBaseUrl, isXiaoV2board, isXboard, CUSTOM_HEADERS_CONFIG } from '@/utils/baseConfig';
+﻿import axios from 'axios';
+import { 
+  API_BASE_URL, 
+  getApiBaseUrl, 
+  isXiaoV2board, 
+  isXboard, 
+  CUSTOM_HEADERS_CONFIG,
+  API_MIDDLEWARE_ENABLED,
+  API_MIDDLEWARE_KEY,
+  API_MIDDLEWARE_PATH,
+  API_BASE_URLS
+} from '@/utils/baseConfig';
 import { mapApiPath } from './utils/pathMapper';
 import { getAvailableApiUrl } from '@/utils/apiAvailabilityChecker';
 import { getEncrypUrl, randomIv } from "@/api/utils/encryption";
 
-const isEncrypted = window.EZ_CONFIG &&
-  window.EZ_CONFIG.API_MIDDLEWARE_ENABLED &&
-  window.EZ_CONFIG.API_MIDDLEWARE_KEY &&
-  window.EZ_CONFIG.API_MIDDLEWARE_KEY !== '';
+const isEncrypted = API_MIDDLEWARE_ENABLED && API_MIDDLEWARE_KEY && API_MIDDLEWARE_KEY !== '';
 
 const request = axios.create({
   baseURL: API_BASE_URL,
@@ -24,20 +30,18 @@ request.interceptors.request.use(
   config => {
       config.baseURL = getApiBaseUrl();
     
-    if (window.EZ_CONFIG && window.EZ_CONFIG.API_MIDDLEWARE_ENABLED) {
+    if (API_MIDDLEWARE_ENABLED) {
       const originalUrl = config.url;
       
-      const path = originalUrl.startsWith("http") ? mapApiPath(config.url) : `${window.EZ_CONFIG.API_MIDDLEWARE_PATH}/${btoa(getEncrypUrl(config.url))}`
+      const path = originalUrl.startsWith("http") ? mapApiPath(config.url) : `${API_MIDDLEWARE_PATH}/${btoa(getEncrypUrl(config.url))}`
       
       config.url = isEncrypted ? path : mapApiPath(config.url);
       
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         console.log(`API路径映射: ${originalUrl} -> ${config.url}`);
       }
     }
-    else if (window.EZ_CONFIG && window.EZ_CONFIG.API_BASE_URLS &&
-             Array.isArray(window.EZ_CONFIG.API_BASE_URLS) &&
-             window.EZ_CONFIG.API_BASE_URLS.length > 1) {
+    else if (API_BASE_URLS && Array.isArray(API_BASE_URLS) && API_BASE_URLS.length > 1) {
       const availableApiUrl = getAvailableApiUrl();
       if (availableApiUrl) {
         config.baseURL = availableApiUrl;
