@@ -1,5 +1,5 @@
 import CryptoJS from "crypto-js";
-import { API_MIDDLEWARE_KEY } from "../../utils/baseConfig.js";
+import {API_MIDDLEWARE_KEY} from "@/utils/baseConfig.js";
 
 const key = API_MIDDLEWARE_KEY;
 
@@ -54,6 +54,5 @@ export function Decrypt(data, k, i) {
 
 export const getEncrypUrl = (url) => {
   const iv = randomIv();
-  const encrypted = Encrypt(url, key, iv);
-  return encrypted;
+    return Encrypt(url, key, iv);
 }

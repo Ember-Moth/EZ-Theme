@@ -1,18 +1,18 @@
 ﻿import axios from 'axios';
-import { 
-  API_BASE_URL, 
-  getApiBaseUrl, 
-  isXiaoV2board, 
-  isXboard, 
-  CUSTOM_HEADERS_CONFIG,
-  API_MIDDLEWARE_ENABLED,
-  API_MIDDLEWARE_KEY,
-  API_MIDDLEWARE_PATH,
-  API_BASE_URLS
+import {
+    API_BASE_URL,
+    API_BASE_URLS,
+    API_MIDDLEWARE_ENABLED,
+    API_MIDDLEWARE_KEY,
+    API_MIDDLEWARE_PATH,
+    CUSTOM_HEADERS_CONFIG,
+    getApiBaseUrl,
+    isXboard,
+    isXiaoV2board
 } from '@/utils/baseConfig';
-import { mapApiPath } from './utils/pathMapper';
-import { getAvailableApiUrl } from '@/utils/apiAvailabilityChecker';
-import { getEncrypUrl, randomIv } from "@/api/utils/encryption";
+import {mapApiPath} from './utils/pathMapper';
+import {getAvailableApiUrl} from '@/utils/apiAvailabilityChecker';
+import {getEncrypUrl, randomIv} from "@/api/utils/encryption";
 
 const isEncrypted = API_MIDDLEWARE_ENABLED && API_MIDDLEWARE_KEY && API_MIDDLEWARE_KEY !== '';
 
@@ -119,8 +119,7 @@ request.interceptors.request.use(
         const customHeaders = CUSTOM_HEADERS_CONFIG.headers;
         for (const headerName in customHeaders) {
           if (Object.prototype.hasOwnProperty.call(customHeaders, headerName)) {
-            const headerValue = customHeaders[headerName];
-            config.headers[headerName] = headerValue;
+              config.headers[headerName] = customHeaders[headerName];
           }
         }
       }
