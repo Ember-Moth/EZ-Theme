@@ -1,4 +1,4 @@
-﻿﻿const isProd = import.meta.env.PROD;
+﻿const isProd = import.meta.env.PROD;
 const enableAntiDebugging = import.meta.env.VITE_DEBUGGING === "true";
 
 (async () => {
