@@ -2,7 +2,7 @@
 
 import { createRouter, createWebHashHistory } from 'vue-router';
 
-import { SITE_CONFIG, DEFAULT_CONFIG, isBrowserRestricted, TRAFFICLOG_CONFIG, isXiaoV2board, AUTH_LAYOUT_CONFIG } from '@/utils/baseConfig';
+import { SITE_CONFIG, DEFAULT_CONFIG, isBrowserRestricted, TRAFFICLOG_CONFIG, isXiaoV2board, AUTH_LAYOUT_CONFIG, NAVIGATION_CONFIG } from '@/utils/baseConfig';
 
 import i18n from '@/i18n';
 
@@ -29,14 +29,10 @@ const getAuthComponent = (componentName) => {
 
 
 const getThirdNavItem = () => {
-
-  const { NAVIGATION_CONFIG } = require('@/utils/baseConfig');
-
   return NAVIGATION_CONFIG?.thirdNavItem || 'docs';
 };
 
 const getFourthNavItem = () => {
-  const { NAVIGATION_CONFIG } = require('@/utils/baseConfig');
   return NAVIGATION_CONFIG?.fourthNavItem || '';
 };
 

@@ -1,9 +1,10 @@
 ﻿
 import axios from 'axios';
-import { API_BASE_URL, getApiBaseUrl, isXiaoV2board, isXboard, CUSTOM_HEADERS_CONFIG } from '@/utils/baseConfig';
+import { API_BASE_URL, getApiBaseUrl, isXiaoV2board, isXboard, CUSTOM_HEADERS_CONFIG, SITE_CONFIG } from '@/utils/baseConfig';
 import { mapApiPath } from './utils/pathMapper';
 import { getAvailableApiUrl } from '@/utils/apiAvailabilityChecker';
 import { getEncrypUrl, randomIv } from "@/api/utils/encryption";
+import { getCookie, forceLogout } from './auth';
 
 const isEncrypted = window.EZ_CONFIG &&
   window.EZ_CONFIG.API_MIDDLEWARE_ENABLED &&
@@ -31,7 +32,7 @@ request.interceptors.request.use(
       
       config.url = isEncrypted ? path : mapApiPath(config.url);
       
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.MODE === 'development') {
         console.log(`API路径映射: ${originalUrl} -> ${config.url}`);
       }
     }
@@ -60,7 +61,6 @@ request.interceptors.request.use(
     
     if (!authData) {
       try {
-        const { getCookie } = require('./auth');
         authData = getCookie('auth_data');
       } catch (err) {
         const cookieAuthData = document.cookie
@@ -73,7 +73,6 @@ request.interceptors.request.use(
             const decodedValue = decodeURIComponent(encodedValue);
             const parsedValue = JSON.parse(decodedValue);
             
-            const { SITE_CONFIG } = require('../utils/baseConfig');
             if (parsedValue && parsedValue.site === SITE_CONFIG.siteName) {
               authData = parsedValue.value;
             }
@@ -94,7 +93,6 @@ request.interceptors.request.use(
         try {
           const parsedValue = JSON.parse(backupData);
           
-          const { SITE_CONFIG } = require('../utils/baseConfig');
           if (parsedValue && parsedValue.site === SITE_CONFIG.siteName) {
             authData = parsedValue.value;
           } else {
@@ -139,7 +137,6 @@ request.interceptors.response.use(
       
       if (res && res.message === '未登录或登陆已过期') {
         console.log('检测到登录已过期，执行登出操作');
-        const { forceLogout } = require('./auth');
         forceLogout();
         window.location.href = '/#/login';
         return Promise.reject(new Error(res.message));

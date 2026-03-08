@@ -537,12 +537,12 @@ export const tokenLogin = (verifyToken, redirect) => {
 export const checkUserLoginStatus = async () => {
   const authData = localStorage.getItem('auth_data') || sessionStorage.getItem('auth_data');
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-  
+
   if (!token || !authData) {
-    forceLogout(); 
+    forceLogout();
     return { isLoggedIn: false };
   }
-  
+
   try {
     const response = await request({
       url: '/user/checkLogin',
@@ -551,39 +551,42 @@ export const checkUserLoginStatus = async () => {
         'Authorization': authData
       }
     });
-    
+
     if (response && response.data && response.data.is_login === true) {
       window.isUserLoggedIn = true;
       return { isLoggedIn: true };
     } else {
       console.log('登录已过期或失效，清除登录状态');
       forceLogout();
-      
+
       const currentRoute = window.location.pathname;
       const isAuthPage = /\/(login|register|forgot-password)/.test(currentRoute);
-      
+
       if (!isAuthPage) {
         window.location.href = '/#/login';
       }
-      
+
       return { isLoggedIn: false, message: '登录已过期，请重新登录' };
     }
   } catch (error) {
     console.error('检查登录状态失败:', error);
-    
+
     if (error.response && error.response.data && error.response.data.message === '未登录或登陆已过期') {
       forceLogout();
-      
+
       const currentRoute = window.location.pathname;
       const isAuthPage = /\/(login|register|forgot-password)/.test(currentRoute);
-      
+
       if (!isAuthPage) {
         window.location.href = '/#/login';
       }
-      
+
       return { isLoggedIn: false, message: '登录已过期，请重新登录' };
     }
-    
+
     return { isLoggedIn: null, error: error.message || '网络错误' };
   }
-}; 
+};
+
+export { setCookie, getCookie, deleteCookie };
+

@@ -3,25 +3,15 @@
   <div class="language-selector">
 
     <!-- 预加载所有国旗图标 -->
-
     <div class="preload-flags" v-once>
-
-      <img :src="require('@/assets/i18N/VN.svg')" alt="Tiếng Việt" class="preload-flag">
-
-      <img :src="require('@/assets/i18N/CN.svg')" alt="中文" class="preload-flag">
-
-      <img :src="require('@/assets/i18N/GB.svg')" alt="English" class="preload-flag">
-
-      <img :src="require('@/assets/i18N/HK.svg')" alt="繁體中文" class="preload-flag">
-
-      <img :src="require('@/assets/i18N/JP.svg')" alt="日本語" class="preload-flag">
-
-      <img :src="require('@/assets/i18N/KR.svg')" alt="한국어" class="preload-flag">
-
-      <img :src="require('@/assets/i18N/RU.svg')" alt="Русский" class="preload-flag">
-
-      <img :src="require('@/assets/i18N/IR.svg')" alt="فارسی" class="preload-flag">
-
+      <img :src="vnFlag" alt="Tiếng Việt" class="preload-flag">
+      <img :src="cnFlag" alt="中文" class="preload-flag">
+      <img :src="gbFlag" alt="English" class="preload-flag">
+      <img :src="hkFlag" alt="繁體中文" class="preload-flag">
+      <img :src="jpFlag" alt="日本語" class="preload-flag">
+      <img :src="krFlag" alt="한국어" class="preload-flag">
+      <img :src="ruFlag" alt="Русский" class="preload-flag">
+      <img :src="irFlag" alt="فارسی" class="preload-flag">
     </div>
 
 

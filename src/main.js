@@ -1,8 +1,8 @@
 ﻿import disableDevtool from "disable-devtool";
 
-const isProd = process.env.NODE_ENV === "production";
-const enableConfigJS = process.env.VUE_APP_CONFIGJS == "true";
-const enableAntiDebugging = process.env.VUE_APP_DEBUGGING == "true";
+const isProd = import.meta.env.MODE === "production";
+const enableConfigJS = import.meta.env.VITE_APP_CONFIGJS == "true";
+const enableAntiDebugging = import.meta.env.VITE_APP_DEBUGGING == "true";
 
 (async () => {
   try {

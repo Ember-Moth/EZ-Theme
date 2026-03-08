@@ -98,6 +98,7 @@ import { IconGift } from '@tabler/icons-vue';
 import NProgress from 'nprogress';
 import 'nprogress/nprogress.css';
 import pageCache from '@/utils/pageCache';
+import { useToast } from '@/composables/useToast';
 
 NProgress.configure({ 
   showSpinner: true,   
@@ -197,7 +198,7 @@ export default {
         
         checkUserLoginStatus().then(result => {
           if (result.isLoggedIn === false && result.message) {
-            const { showToast } = require('@/composables/useToast').useToast();
+            const { showToast } = useToast();
             if (showToast) {
               showToast(result.message, 'warning');
             }
@@ -232,7 +233,7 @@ export default {
       
       checkUserLoginStatus().then(result => {
         if (result.isLoggedIn === false && result.message) {
-          const { showToast } = require('@/composables/useToast').useToast();
+          const { showToast } = useToast();
           if (showToast) {
             showToast(result.message, 'warning');
           }
